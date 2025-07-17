@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Conversor KML para Texto</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #e0e7ff, #f4f4f9);
+      color: #333;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+    }
+
+    #mensagem {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background-color: #4caf50;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      display: none;
+      font-size: 1rem;
+      z-index: 1000;
+      transition: opacity 0.5s ease;
+    }
+
+    .container {
+      background-color: #fff;
+      margin-top: 40px;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 600px;
+      text-align: center;
+    }
+
+    h1 {
+      color: #1e3a8a;
+      font-size: 2rem;
+      margin-bottom: 20px;
+    }
+
+    p {
+      font-size: 1.1rem;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    input[type="file"] {
+      width: 90%;
+      padding: 10px;
+      margin-bottom: 20px;
+      border: 2px dashed #cbd5e1;
+      border-radius: 10px;
+      background-color: #f8fafc;
+      cursor: pointer;
+    }
+
+    textarea {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 1rem;
+      margin-bottom: 15px;
+      background-color: #f9fafb;
+      resize: vertical;
+      height: 200px;
+    }
+
+    .button-group {
+      display: flex;
+      justify-content: center;
+      margin-top: 10px;
+    }
+
+    button {
+      padding: 12px;
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #1d4ed8;
+    }
+
+    .result-container {
+      margin-top: 20px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="mensagem"></div>
+
+  <div class="container">
+    <h1>Conversor KML para Texto</h1>
+    <p>1. Selecione o arquivo KML:</p>
+    <input type="file" id="fileInput" accept=".kml" />
+    <button onclick="converter()">Converter</button>
+
+    <div class="result-container" id="resultContainer">
+      <h2>Resultado:</h2>
+      <textarea id="resultado" placeholder="O texto formatado aparecerá aqui"></textarea>
+      <div class="button-group">
+        <button onclick="copiarResultado()">Copiar Texto</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function mostrarMensagem(texto, cor = "#4caf50") {
+      const msg = document.getElementById("mensagem");
+      msg.textContent = texto;
+      msg.style.backgroundColor = cor;
+      msg.style.display = "block";
+      msg.style.opacity = "1";
+
+      setTimeout(() => {
+        msg.style.opacity = "0";
+        setTimeout(() => {
+          msg.style.display = "none";
+        }, 500);
+      }, 3000);
+    }
+
+    function converter() {
+      const fileInput = document.getElementById("fileInput").files[0];
+      if (!fileInput) {
+        mostrarMensagem("Selecione um arquivo KML!", "#f44336");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const kml = event.target.result;
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(kml, "text/xml");
+        const placemarks = xmlDoc.getElementsByTagName("Placemark");
+
+        const pontos = [];
+        let titulo = "";
+
+        for (let i = 0; i < placemarks.length; i++) {
+          try {
+            const nameElement = placemarks[i].getElementsByTagName("name")[0];
+            if (!nameElement) continue;
+
+            const nome = nameElement.textContent.trim();
+            let coordsElement = null;
+
+            const point = placemarks[i].getElementsByTagName("Point")[0];
+            if (point) {
+              coordsElement = point.getElementsByTagName("coordinates")[0];
+            } else {
+              const lineString = placemarks[i].getElementsByTagName("LineString")[0];
+              if (lineString) {
+                coordsElement = lineString.getElementsByTagName("coordinates")[0];
+                if (coordsElement) {
+                  const allCoords = coordsElement.textContent.trim().split(/\s+/);
+                  if (allCoords.length > 0) {
+                    coordsElement.textContent = allCoords[0];
+                  }
+                }
+              }
+            }
+
+            if (coordsElement) {
+              const coordsText = coordsElement.textContent.trim();
+              const partes = coordsText.split(",");
+              if (partes.length >= 2) {
+                const longitude = partes[0].trim();
+                const latitude = partes[1].trim();
+                const link = "https://maps.google.com/?q=" + latitude + "," + longitude;
+
+                if (i === 0 && !/\b\d{1,2}:\d{2}\b/.test(nome)) {
+                  titulo = nome;
+                } else {
+                  if (!pontos.some(p => p.link === link)) {
+                    pontos.push({ nome, link });
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.error("Erro ao processar placemark:", e);
+          }
+        }
+
+        if (pontos.length === 0 && !titulo) {
+          mostrarMensagem("Nenhum ponto válido encontrado no KML!", "#f44336");
+          return;
+        }
+
+        let mensagem = "";
+        let contador = 1;
+        const regexHorario = /\b([01]?\d|2[0-3]):[0-5]\d\b/;
+
+        if (titulo) {
+          mensagem += `*INÍCIO: ${titulo}*\n\n`;
+        }
+
+        pontos.forEach((ponto) => {
+          if (regexHorario.test(ponto.nome)) {
+            mensagem += `${contador}º. *${ponto.nome}:* ${ponto.link}\n\n`;
+            contador++;
+          } else {
+            mensagem += `*${ponto.nome}*\n\n`;
+          }
+        });
+
+        document.getElementById("resultado").value = mensagem;
+        document.getElementById("resultContainer").style.display = "block";
+        mostrarMensagem("Conversão concluída com sucesso!");
+      };
+
+      reader.readAsText(fileInput);
+    }
+
+    function copiarResultado() {
+      const textarea = document.getElementById("resultado");
+      if (!textarea.value) {
+        mostrarMensagem("Nada para copiar!", "#ff9800");
+        return;
+      }
+      textarea.select();
+      document.execCommand("copy");
+      mostrarMensagem("Texto copiado com sucesso!");
+    }
+  </script>
+</body>
+</html>
